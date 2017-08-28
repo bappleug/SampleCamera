@@ -33,7 +33,16 @@ import android.support.v4.os.ParcelableCompatCreatorCallbacks;
 import android.support.v4.view.ViewCompat;
 import android.util.AttributeSet;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 
+
+import org.opencv.android.Utils;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -505,7 +514,7 @@ public class CameraView extends FrameLayout {
             savePictureObserver = Single.fromCallable(new Callable<String>() {
                 @Override
                 public String call() throws Exception {
-                    TimeLogger.start("picture matrix");
+                    TimeLogger.start("picture matrix flip");
                     String path = generateOutputFilePath();
                     File file = new File(path);
                     FileOutputStream fos = new FileOutputStream(file);
@@ -516,11 +525,29 @@ public class CameraView extends FrameLayout {
                     }
                     matrix.preRotate(orientation);
                     Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-                    Bitmap resultBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                    TimeLogger.stop("picture matrix");
+                    Bitmap flipBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                    TimeLogger.stop("picture matrix flip");
+
+//                    TimeLogger.start("picture opencv rotate");
+//                    Mat originMat = new Mat();
+//                    Utils.bitmapToMat(bitmap, originMat);
+//
+////                    Mat matFlipResult = new Mat();
+////                    Core.flip(originMat, matFlipResult, 1);
+//
+//                    Mat matrixRotate = Imgproc.getRotationMatrix2D(new Point(originMat.cols() / 2, originMat.rows() / 2), orientation, 1);
+//                    Mat matRotateResult = new Mat();
+//
+//                    Imgproc.warpAffine(originMat, matRotateResult, matrixRotate, originMat.size());
+
+//                    Bitmap resultBitmap = Bitmap.createBitmap(matRotateResult.width(), matRotateResult.height(), Bitmap.Config.ARGB_8888);
+//                    Utils.matToBitmap(matRotateResult, resultBitmap);
+//                    TimeLogger.stop("picture opencv rotate");
+
                     TimeLogger.start("picture compress");
-                    resultBitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
-                    resultBitmap.recycle();
+                    flipBitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
+                    flipBitmap.recycle();
+//                    flipBitmap.recycle();
                     bitmap.recycle();
                     fos.close();
 //                    if(getFacing() == CameraView.FACING_FRONT){

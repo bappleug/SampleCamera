@@ -17,6 +17,7 @@
 package me.ray.samplecamera.camera;
 
 import android.annotation.SuppressLint;
+import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Build;
@@ -253,6 +254,7 @@ class Camera1 extends CameraViewImpl {
             mCamera.takePicture(null, null, null, new Camera.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] data, Camera camera) {
+                    mCamera.stopPreview();
                     isPictureCaptureInProgress.set(false);
                     mCallback.onPictureTaken(data, calcCameraPictureRotation(mSensorOrientation));
                     camera.cancelAutoFocus();
@@ -310,6 +312,9 @@ class Camera1 extends CameraViewImpl {
         }
         mCamera = Camera.open(mCameraId);
         mCameraParameters = mCamera.getParameters();
+        List<Integer> supportedPictureFormat = mCameraParameters.getSupportedPictureFormats();
+        List<Integer> supportedPreviewFormats = mCameraParameters.getSupportedPreviewFormats();
+        mCameraParameters.setPictureFormat(ImageFormat.JPEG);
         // Supported preview sizes
         mPreviewSizes.clear();
         for (Camera.Size size : mCameraParameters.getSupportedPreviewSizes()) {

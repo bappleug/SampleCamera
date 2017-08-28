@@ -47,6 +47,10 @@ public class CameraActivity extends AppCompatActivity implements Toolbar.OnMenuI
     private Disposable openCameraDisposable;
     private CameraView.Callback callback;
 
+    static {
+        System.loadLibrary("opencv_java3");
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
