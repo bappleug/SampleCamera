@@ -30,4 +30,6 @@ interface Constants {
     int FLASH_AUTO = 3;
     int FLASH_RED_EYE = 4;
 
+    int PICTURE_SIZE_LARGEST = -1;
+    int PICTURE_SIZE_SMALLEST = -2;
 }

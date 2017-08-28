@@ -86,6 +86,7 @@ public class CameraActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 throwable.printStackTrace();
             }
         };
+        cameraView.setDesiredPictureSize(1440, 1080);
         cameraView.addCallback(callback);
         appBar.setNavigationOnClickListener(v -> onBackPressed());
         appBar.inflateMenu(R.menu.menu_camera);

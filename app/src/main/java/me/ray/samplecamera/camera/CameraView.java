@@ -74,6 +74,8 @@ public class CameraView extends FrameLayout {
      * The camera device faces the same direction as the device's screen.
      */
     public static final int FACING_FRONT = Constants.FACING_FRONT;
+    private int mDesiredPictureWidth;
+    private int mDesiredPictureHeight;
 
     /**
      * Direction the camera faces relative to device screen.
@@ -449,6 +451,12 @@ public class CameraView extends FrameLayout {
         return mImpl.getFlash();
     }
 
+    public void setDesiredPictureSize(int desiredPictureWidth, int desiredPictureHeight) {
+        mDesiredPictureHeight = desiredPictureHeight;
+        mDesiredPictureWidth = desiredPictureWidth;
+        mImpl.setDesiredPictureSize(desiredPictureWidth, desiredPictureHeight);
+    }
+
     /**
      * Take a picture. The result will be returned to
      * .
@@ -514,21 +522,37 @@ public class CameraView extends FrameLayout {
             savePictureObserver = Single.fromCallable(new Callable<String>() {
                 @Override
                 public String call() throws Exception {
-                    TimeLogger.start("picture matrix flip");
-                    String path = generateOutputFilePath();
-                    File file = new File(path);
-                    FileOutputStream fos = new FileOutputStream(file);
+                    TimeLogger.start("picture decode");
+
+                    //prepare img
+                    BitmapFactory.Options options = new BitmapFactory.Options();
+                    options.inJustDecodeBounds = true;
+                    options.inPreferredConfig = Bitmap.Config.RGB_565;
+                    options.inPreferQualityOverSpeed = false;
+                    BitmapFactory.decodeByteArray(data, 0, data.length, options);
+                    int preHeight = options.outHeight;
+                    int sampleSize = 1;
+                    while (preHeight / mDesiredPictureHeight >= 2) {
+                        sampleSize = sampleSize << 1;
+                        preHeight = preHeight / 2;
+                    }
+                    options.inJustDecodeBounds = false;
+                    options.inSampleSize = sampleSize;
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length, options);
+                    TimeLogger.stop("picture decode");
+
+                    //rotate and flip
                     Matrix matrix = new Matrix();
                     if (getFacing() == CameraView.FACING_FRONT) {
                         float[] mirrorY = {-1, 0, 0, 0, 1, 0, 0, 0, 1};
                         matrix.setValues(mirrorY);
                     }
                     matrix.preRotate(orientation);
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                    TimeLogger.start("picture matrix flip");
                     Bitmap flipBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
                     TimeLogger.stop("picture matrix flip");
 
-//                    TimeLogger.start("picture opencv rotate");
+//                                TimeLogger.start("picture opencv rotate");
 //                    Mat originMat = new Mat();
 //                    Utils.bitmapToMat(bitmap, originMat);
 //
@@ -544,14 +568,18 @@ public class CameraView extends FrameLayout {
 //                    Utils.matToBitmap(matRotateResult, resultBitmap);
 //                    TimeLogger.stop("picture opencv rotate");
 
+                    //compress and output
                     TimeLogger.start("picture compress");
-                    flipBitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
+                    String path = generateOutputFilePath();
+                    File file = new File(path);
+                    FileOutputStream fos = new FileOutputStream(file);
+                    flipBitmap.compress(Bitmap.CompressFormat.JPEG, 75, fos);
                     flipBitmap.recycle();
 //                    flipBitmap.recycle();
                     bitmap.recycle();
                     fos.close();
 //                    if(getFacing() == CameraView.FACING_FRONT){
-                        setExifOrientation(path, orientation);
+                    setExifOrientation(path, orientation);
 //                    }
                     TimeLogger.stop("picture compress");
                     return path;

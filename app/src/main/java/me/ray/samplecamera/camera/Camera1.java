@@ -76,6 +76,8 @@ class Camera1 extends CameraViewImpl {
 
     private int mDisplayOrientation;
     private int mSensorOrientation;
+    private int mDesiredPictureWidth = Constants.PICTURE_SIZE_LARGEST;
+    private int mDesiredPictureHeight = Constants.PICTURE_SIZE_LARGEST;
 
     Camera1(Callback callback, PreviewImpl preview) {
         super(callback, preview);
@@ -235,7 +237,10 @@ class Camera1 extends CameraViewImpl {
             throw new IllegalStateException(
                     "Camera is not ready. Call start() before takePicture().");
         }
-        TimeLogger.start("picture take");
+        TimeLogger.start("picture shutter");
+        TimeLogger.start("raw take");
+        TimeLogger.start("postview take");
+        TimeLogger.start("jpeg take");
         if (getAutoFocus()) {
             mCamera.cancelAutoFocus();
             mCamera.autoFocus(new Camera.AutoFocusCallback() {
@@ -251,14 +256,29 @@ class Camera1 extends CameraViewImpl {
 
     void takePictureInternal() {
         if (!isPictureCaptureInProgress.getAndSet(true)) {
-            mCamera.takePicture(null, null, null, new Camera.PictureCallback() {
+            mCamera.takePicture(new Camera.ShutterCallback() {
+                @Override
+                public void onShutter() {
+                    TimeLogger.stop("picture shutter");
+                }
+            }, new Camera.PictureCallback() {
+                @Override
+                public void onPictureTaken(byte[] data, Camera camera) {
+                    TimeLogger.stop("raw take");
+                }
+            }, new Camera.PictureCallback() {
+                @Override
+                public void onPictureTaken(byte[] data, Camera camera) {
+                    TimeLogger.stop("postview take");
+                }
+            }, new Camera.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] data, Camera camera) {
                     mCamera.stopPreview();
                     isPictureCaptureInProgress.set(false);
                     mCallback.onPictureTaken(data, calcCameraPictureRotation(mSensorOrientation));
                     camera.cancelAutoFocus();
-                    TimeLogger.stop("picture take");
+                    TimeLogger.stop("jpeg take");
 //                    camera.startPreview();
                 }
             });
@@ -292,6 +312,12 @@ class Camera1 extends CameraViewImpl {
         }
     }
 
+    @Override
+    void setDesiredPictureSize(int desiredPictureWidth, int desiredPictureHeight){
+        this.mDesiredPictureWidth = desiredPictureWidth;
+        this.mDesiredPictureHeight = desiredPictureHeight;
+    }
+
     /**
      * This rewrites {@link #mCameraId} and {@link #mCameraInfo}.
      */
@@ -312,8 +338,6 @@ class Camera1 extends CameraViewImpl {
         }
         mCamera = Camera.open(mCameraId);
         mCameraParameters = mCamera.getParameters();
-        List<Integer> supportedPictureFormat = mCameraParameters.getSupportedPictureFormats();
-        List<Integer> supportedPreviewFormats = mCameraParameters.getSupportedPreviewFormats();
         mCameraParameters.setPictureFormat(ImageFormat.JPEG);
         // Supported preview sizes
         mPreviewSizes.clear();
@@ -351,15 +375,15 @@ class Camera1 extends CameraViewImpl {
             mAspectRatio = chooseAspectRatio();
             sizes = mPreviewSizes.sizes(mAspectRatio);
         }
-        Size size = chooseOptimalSize(sizes);
+        Size previewSize = chooseOptimalPreviewSize(sizes);
         final Camera.Size currentSize = mCameraParameters.getPictureSize();
-        if (currentSize.width != size.getWidth() || currentSize.height != size.getHeight()) {
+        if (currentSize.width != previewSize.getWidth() || currentSize.height != previewSize.getHeight()) {
             // Largest picture size in this ratio
-            final Size pictureSize = mPictureSizes.sizes(mAspectRatio).last();
+            final Size pictureSize = chooseOptimalPictureSize(mPictureSizes.sizes(mAspectRatio));
             if (mShowingPreview) {
                 mCamera.stopPreview();
             }
-            mCameraParameters.setPreviewSize(size.getWidth(), size.getHeight());
+            mCameraParameters.setPreviewSize(previewSize.getWidth(), previewSize.getHeight());
             mCameraParameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
 //            mCameraParameters.setRotation(calcCameraPictureRotation(mSensorOrientation));
             setAutoFocusInternal(mAutoFocus);
@@ -372,7 +396,7 @@ class Camera1 extends CameraViewImpl {
     }
 
     @SuppressWarnings("SuspiciousNameCombination")
-    private Size chooseOptimalSize(SortedSet<Size> sizes) {
+    private Size chooseOptimalPreviewSize(SortedSet<Size> sizes) {
         if (!mPreview.isReady()) { // Not yet laid out
             return sizes.first(); // Return the smallest size
         }
@@ -387,11 +411,40 @@ class Camera1 extends CameraViewImpl {
             desiredWidth = surfaceWidth;
             desiredHeight = surfaceHeight;
         }
-        Size result = null;
+        Size result = sizes.first();
         for (Size size : sizes) { // Iterate from small to large
+            if(size.getWidth() > size.getHeight() && desiredWidth < desiredHeight){
+                int temp = desiredWidth;
+                desiredWidth = desiredHeight;
+                desiredHeight = temp;
+            }
             if (desiredWidth <= size.getWidth() && desiredHeight <= size.getHeight()) {
                 return size;
+            }
+            result = size;
+        }
+        return result;
+    }
 
+    @SuppressWarnings("SuspiciousNameCombination")
+    private Size chooseOptimalPictureSize(SortedSet<Size> sizes){
+        int desiredWidth = mDesiredPictureWidth;
+        int desiredHeight = mDesiredPictureHeight;
+        if(desiredWidth == Constants.PICTURE_SIZE_LARGEST || desiredHeight == Constants.PICTURE_SIZE_LARGEST){
+            return sizes.last();
+        }
+        if(desiredWidth == Constants.PICTURE_SIZE_SMALLEST || desiredHeight == Constants.PICTURE_SIZE_SMALLEST){
+            return sizes.first();
+        }
+        Size result = sizes.first();
+        for (Size size : sizes) { // Iterate from small to large
+            if(size.getWidth() > size.getHeight() && desiredWidth < desiredHeight){
+                int temp = desiredWidth;
+                desiredWidth = desiredHeight;
+                desiredHeight = temp;
+            }
+            if (desiredWidth <= size.getWidth() && desiredHeight <= size.getHeight()) {
+                return size;
             }
             result = size;
         }
